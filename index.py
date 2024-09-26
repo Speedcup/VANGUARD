@@ -4,13 +4,17 @@ import pkgutil
 
 from interactions import Client, listen, Activity, ActivityType, Intents, Status
 
+from models.internal.InternalCache import InternalCache
+
 logging.basicConfig()
 log = logging.getLogger("VANGUARD")
 log.setLevel(logging.DEBUG)
 
 
 class Bot(Client):
-    debug: bool = False
+    # Automatically sets the bot to debug mode when the env var is set to it.
+    debug: bool = bool(os.getenv("DEBUG")) or False
+    internal_cache: InternalCache
 
     @listen()
     async def on_startup(self):
@@ -28,7 +32,7 @@ if __name__ == "__main__":
         fetch_members=True,
         status=Status.DND,
     )
-    bot.debug = bool(os.getenv("DEBUG")) or False
+    bot.internal_cache = InternalCache(bot)
 
     # Removing automatic updates for now because I need a more stable version control rather than just a file containing the version.
     # Once this has been switched to a database, I can re-activate it.
