@@ -1,5 +1,5 @@
 from interactions import Embed as iEmbed, EmbedAttachment
-from models.Colors import Colors
+from models.colors import Colors
 from models.const import VALPAW_LOGO
 
 

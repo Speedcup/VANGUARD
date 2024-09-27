@@ -4,7 +4,7 @@ import pkgutil
 
 from interactions import Client, listen, Activity, ActivityType, Intents, Status
 
-from models.internal.InternalCache import InternalCache
+from models.internal.internal_cache import InternalCache
 
 logging.basicConfig()
 log = logging.getLogger("VANGUARD")

@@ -1,4 +1,4 @@
-from models.discord.Embed import Embed
+from models.discord.embed import Embed
 
 from typing import TypeVar, Callable
 

@@ -24,9 +24,9 @@ from interactions import (
     Permissions,
 )
 
-from models.internal.StoredVersion import StoredVersion
-from models.internal.AppStoreRelease import AppStoreRelease
-from models.internal.TestFlightRelease import TestFlightRelease
+from models.internal.stored_version import StoredVersion
+from models.internal.appstore_release import AppStoreRelease
+from models.internal.testflight_release import TestFlightRelease
 
 
 class AppUpdates(Extension):

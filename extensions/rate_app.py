@@ -1,5 +1,5 @@
 from interactions import Extension, slash_command, SlashContext
-from models.discord.Embed import Embed
+from models.discord.embed import Embed
 
 
 class RateApp(Extension):
