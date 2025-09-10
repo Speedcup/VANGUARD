@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Python dependency files (editable installs)
+*.egg-info/
+*.eggs/
+
+# PyInstaller
+*.spec
+
+# Installer scripts, build files
+build/
+dist/
+
+# VCS
+.git/
+.gitignore
+
+# IDE / Editor files
+.idea/
+.vscode/
+
+# Mac / Linux / Windows system files
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Logs
+*.log
+
+# Misc
+*.swp
+*.bak
+*.tmp

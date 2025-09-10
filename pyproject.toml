@@ -1,0 +1,80 @@
+[project]
+name = "vanguard"
+version = "0.1.0"
+description = "Utils bot VANGUARD for the VALPAW Discord server"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+    { name = "speedcup", email = "mail@speedcup.dev" },
+]
+maintainers = [
+    { name = "speedcup", email = "mail@speedcup.dev" },
+]
+dependencies = [
+    "aerich[asyncpg,toml]>=0.9.1",
+    "discord-py-interactions[jurigged,speedup]>=5.15.0",
+    "httpx>=0.28.1",
+    "openai>=1.99.9",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "tortoise-orm[asyncpg]>=0.25.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.8",
+]
+
+[tool.ruff]
+line-length = 99
+target-version = "py312"
+exclude = [
+    ".git",
+    "venv",
+    ".venv",
+]
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "B",
+    "I",
+    "UP",
+    "N",
+    "SIM",
+    "C4",
+    "TID",
+    "T10",
+    "Q",
+    "RET",
+]
+ignore = [
+    "N805",
+    "UP045",
+    "UP006",
+    "UP035",
+    "TID252",
+    "Q000",
+    "Q003",
+    "E501",
+    "SIM118",
+    "UP046",
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-single-line = false
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.aerich]
+tortoise_orm = "src.common.environment.TORTOISE_ORM"
+location = "src/database/migrations"
+src_folder = "./."

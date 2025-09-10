@@ -1,14 +1,31 @@
-# Use an official Python runtime as a parent image
-FROM python:3.12
+FROM python:3.12-slim-bookworm
 
-# Set the working directory in the container
+# Set working directory
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY ../VALPAW-VANGUARD /app
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Download the latest installer
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
 
-# Run app.py when the container launches
-CMD ["python3.12", "index.py"]
+# Run the installer then remove it
+RUN sh /uv-installer.sh && rm /uv-installer.sh
+
+# Ensure the installed binary is on the `PATH` and use environment
+ENV PATH="/root/.local/bin/:$PATH"
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Copy project files
+
+WORKDIR /app
+COPY . /app
+
+# Install Python dependencies
+RUN uv sync --frozen
+
+# Run the bot
+CMD ["uv", "run", "python", "-m", "src.main"]
