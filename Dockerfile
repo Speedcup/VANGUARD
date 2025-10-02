@@ -4,8 +4,10 @@ FROM python:3.12
 # Set the working directory in the container
 WORKDIR /app
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./requirements.txt
+RUN pip install -r requirements.txt
+
+COPY . .
 
 # Run app.py when the container launches
 CMD ["python3.12", "index.py"]
