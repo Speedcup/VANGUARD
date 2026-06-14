@@ -1,12 +1,9 @@
-"""Idempotent database initialisation: schema + first-run seeds.
-
-Safe to run on every startup: every statement uses ``IF NOT EXISTS`` /
-``ON CONFLICT DO NOTHING`` semantics, so it never clobbers existing data.
-"""
+"""Idempotent database initialisation: schema + first-run seeds."""
 
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import asyncpg
 
@@ -18,7 +15,6 @@ log = logging.getLogger("vanguard.db")
 EMBEDDING_DIM = 384
 
 _SCHEMA_STATEMENTS: tuple[str, ...] = (
-    "CREATE EXTENSION IF NOT EXISTS vector;",
     f"""
     CREATE TABLE IF NOT EXISTS faq_entries (
         id          BIGSERIAL PRIMARY KEY,
@@ -159,111 +155,122 @@ def _ios_versions() -> list[str]:
     return versions
 
 
-async def _seed_option_sets(conn: asyncpg.Connection) -> None:
-    for set_name, labels in _SEED_OPTION_SETS.items():
-        for order, label in enumerate(labels):
+class DatabaseSchema:
+    """Create tables/extensions and seed first-run data."""
+
+    def __init__(self, pool: asyncpg.Pool, config: Config) -> None:
+        self._pool = pool
+        self._config = config
+
+    @staticmethod
+    def _ios_versions() -> list[str]:
+        versions: list[str] = []
+        for major, highest in _IOS_MINORS.items():
+            versions.extend(f"{major}.{minor}" for minor in range(highest + 1))
+        return versions
+
+    async def _seed_option_sets(self, conn: Any) -> None:
+        for set_name, labels in _SEED_OPTION_SETS.items():
+            for order, label in enumerate(labels):
+                await conn.execute(
+                    """
+                    INSERT INTO option_set_items (set_name, label, value, display_order)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (set_name, value) DO NOTHING;
+                    """,
+                    set_name,
+                    label,
+                    label,
+                    order,
+                )
+
+    async def _apply_device_seed(self, conn: Any) -> None:
+        """Reset the device sets to the canonical lists. Destructive but one-time."""
+
+        await conn.execute(
+            "DELETE FROM option_set_items WHERE set_name = ANY($1::text[]);",
+            list(_DEVICE_SET_NAMES),
+        )
+        for order, label in enumerate(_IPHONE_MODELS):
             await conn.execute(
                 """
                 INSERT INTO option_set_items (set_name, label, value, display_order)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (set_name, value) DO NOTHING;
+                VALUES ('iphone_model', $1, $1, $2);
                 """,
-                set_name,
-                label,
                 label,
                 order,
             )
+        for order, (value, label, description) in enumerate(_IPHONE_LINES):
+            await conn.execute(
+                """
+                INSERT INTO option_set_items (set_name, label, value, description, display_order)
+                VALUES ('iphone_line', $1, $2, $3, $4);
+                """,
+                label,
+                value,
+                description,
+                order,
+            )
+        for order, version in enumerate(self._ios_versions()):
+            await conn.execute(
+                """
+                INSERT INTO option_set_items (set_name, label, value, display_order)
+                VALUES ('ios_version', $1, $1, $2);
+                """,
+                version,
+                order,
+            )
 
+    async def _migrate_device_sets(self, conn: Any) -> None:
+        """Apply the device seed once per ``CURRENT_SEED_VERSION`` bump."""
 
-async def _apply_device_seed(conn: asyncpg.Connection) -> None:
-    """Reset the device sets to the canonical lists. Destructive but one-time."""
+        stored = await conn.fetchval("SELECT value FROM bot_settings WHERE key = 'seed_version';")
+        version = int(stored) if stored and str(stored).isdigit() else 0
+        if version >= CURRENT_SEED_VERSION:
+            return
 
-    await conn.execute(
-        "DELETE FROM option_set_items WHERE set_name = ANY($1::text[]);",
-        list(_DEVICE_SET_NAMES),
-    )
-    for order, label in enumerate(_IPHONE_MODELS):
+        await self._apply_device_seed(conn)
         await conn.execute(
             """
-            INSERT INTO option_set_items (set_name, label, value, display_order)
-            VALUES ('iphone_model', $1, $1, $2);
+            INSERT INTO bot_settings (key, value) VALUES ('seed_version', $1)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
             """,
-            label,
-            order,
+            str(CURRENT_SEED_VERSION),
         )
-    for order, (value, label, description) in enumerate(_IPHONE_LINES):
-        await conn.execute(
-            """
-            INSERT INTO option_set_items (set_name, label, value, description, display_order)
-            VALUES ('iphone_line', $1, $2, $3, $4);
-            """,
-            label,
-            value,
-            description,
-            order,
-        )
-    for order, version in enumerate(_ios_versions()):
-        await conn.execute(
-            """
-            INSERT INTO option_set_items (set_name, label, value, display_order)
-            VALUES ('ios_version', $1, $1, $2);
-            """,
-            version,
-            order,
-        )
+        log.info("Applied device seed migration (v%d).", CURRENT_SEED_VERSION)
 
+    async def _seed_settings(self, conn: Any) -> None:
+        defaults = {
+            "faq_similarity_threshold": str(self._config.faq_similarity_threshold),
+            "faq_fuzzy_threshold": str(self._config.faq_fuzzy_threshold),
+            "faq_cooldown_seconds": str(self._config.faq_cooldown_seconds),
+            "faq_min_message_length": str(self._config.faq_min_message_length),
+            "faq_optout_channels": "",  # CSV of channel IDs the auto-responder ignores.
+            "nudge_enabled": "1",  # Whether to nudge informal bug/suggestion messages.
+            "nudge_cooldown_seconds": "600",  # Per-user/channel cooldown between nudges.
+            "honeypot_softban_seconds": str(self._config.honeypot_softban_seconds),
+            "honeypot_exempt_roles": "",  # CSV of role IDs exempt from the trap.
+        }
+        for key, value in defaults.items():
+            await conn.execute(
+                """
+                INSERT INTO bot_settings (key, value)
+                VALUES ($1, $2)
+                ON CONFLICT (key) DO NOTHING;
+                """,
+                key,
+                value,
+            )
 
-async def _migrate_device_sets(conn: asyncpg.Connection) -> None:
-    """Apply the device seed once per ``CURRENT_SEED_VERSION`` bump."""
+    async def init(self) -> None:
+        """Create tables/extensions and seed first-run data. Idempotent."""
 
-    stored = await conn.fetchval("SELECT value FROM bot_settings WHERE key = 'seed_version';")
-    version = int(stored) if stored and str(stored).isdigit() else 0
-    if version >= CURRENT_SEED_VERSION:
-        return
-
-    await _apply_device_seed(conn)
-    await conn.execute(
-        """
-        INSERT INTO bot_settings (key, value) VALUES ('seed_version', $1)
-        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-        """,
-        str(CURRENT_SEED_VERSION),
-    )
-    log.info("Applied device seed migration (v%d).", CURRENT_SEED_VERSION)
-
-
-async def _seed_settings(conn: asyncpg.Connection, config: Config) -> None:
-    defaults = {
-        "faq_similarity_threshold": str(config.faq_similarity_threshold),
-        "faq_fuzzy_threshold": str(config.faq_fuzzy_threshold),
-        "faq_cooldown_seconds": str(config.faq_cooldown_seconds),
-        "faq_min_message_length": str(config.faq_min_message_length),
-        "faq_optout_channels": "",  # CSV of channel IDs the auto-responder ignores.
-        "nudge_enabled": "1",  # Whether to nudge informal bug/suggestion messages.
-        "nudge_cooldown_seconds": "600",  # Per-user/channel cooldown between nudges.
-        "honeypot_softban_seconds": str(config.honeypot_softban_seconds),
-        "honeypot_exempt_roles": "",  # CSV of role IDs exempt from the trap.
-    }
-    for key, value in defaults.items():
-        await conn.execute(
-            """
-            INSERT INTO bot_settings (key, value)
-            VALUES ($1, $2)
-            ON CONFLICT (key) DO NOTHING;
-            """,
-            key,
-            value,
-        )
-
-
-async def init_db(pool: asyncpg.Pool, config: Config) -> None:
-    """Create tables/extensions and seed first-run data. Idempotent."""
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for statement in _SCHEMA_STATEMENTS:
-                await conn.execute(statement)
-            await _seed_option_sets(conn)
-            await _seed_settings(conn, config)
-            await _migrate_device_sets(conn)
-    log.info("Database schema initialised and seeds applied.")
+        async with self._pool.acquire() as conn:
+            conn_any: Any = conn
+            async with conn_any.transaction():
+                for statement in _SCHEMA_STATEMENTS:
+                    await conn_any.execute(statement)
+                await self._seed_option_sets(conn_any)
+                await self._seed_settings(conn_any)
+                await self._migrate_device_sets(conn_any)
+        log.info("Database schema initialised and seeds applied.")
