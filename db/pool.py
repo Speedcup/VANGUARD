@@ -1,10 +1,4 @@
-"""asyncpg connection-pool lifecycle.
-
-pgvector needs its custom ``vector`` type registered on every connection, but the
-type only exists once ``CREATE EXTENSION vector`` has run. To avoid a
-chicken-and-egg problem we ensure the extension exists on a throwaway connection
-*before* building the pool whose ``init`` hook registers the type.
-"""
+"""asyncpg connection-pool lifecycle."""
 
 from __future__ import annotations
 
@@ -16,34 +10,46 @@ from pgvector.asyncpg import register_vector
 log = logging.getLogger("vanguard.db")
 
 
-async def _ensure_extension(dsn: str) -> None:
-    conn = await asyncpg.connect(dsn)
-    try:
-        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-    finally:
-        await conn.close()
+class DatabasePool:
+    """Manage the pgvector-aware asyncpg pool lifecycle."""
 
+    def __init__(self, dsn: str) -> None:
+        self._dsn = dsn
+        self._pool: asyncpg.Pool | None = None
 
-async def _register(conn: asyncpg.Connection) -> None:
-    await register_vector(conn)
+    @property
+    def pool(self) -> asyncpg.Pool | None:
+        return self._pool
 
+    async def _ensure_extension(self) -> None:
+        conn = await asyncpg.connect(self._dsn)
+        try:
+            await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        finally:
+            await conn.close()
 
-async def create_pool(dsn: str) -> asyncpg.Pool:
-    """Create a pgvector-aware connection pool."""
+    async def _register(self, conn: asyncpg.Connection) -> None:
+        await register_vector(conn)
 
-    await _ensure_extension(dsn)
-    pool = await asyncpg.create_pool(
-        dsn,
-        min_size=1,
-        max_size=10,
-        init=_register,
-        command_timeout=30,
-    )
-    log.info("Database pool created.")
-    return pool
+    async def create(self) -> asyncpg.Pool:
+        """Create and cache a pgvector-aware connection pool."""
 
+        if self._pool is not None:
+            return self._pool
 
-async def close_pool(pool: asyncpg.Pool | None) -> None:
-    if pool is not None:
-        await pool.close()
-        log.info("Database pool closed.")
+        await self._ensure_extension()
+        self._pool = await asyncpg.create_pool(
+            self._dsn,
+            min_size=1,
+            max_size=10,
+            init=self._register,
+            command_timeout=30,
+        )
+        log.info("Database pool created.")
+        return self._pool
+
+    async def close(self) -> None:
+        if self._pool is not None:
+            await self._pool.close()
+            self._pool = None
+            log.info("Database pool closed.")

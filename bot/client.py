@@ -11,8 +11,8 @@ from discord.ext import commands
 
 import cogs as cogs_package
 from bot.config import Config
-from db.pool import close_pool, create_pool
-from db.schema import init_db
+from db.pool import DatabasePool
+from db.schema import DatabaseSchema
 from repositories.faq_repo import FaqRepository
 from repositories.honeypot_repo import HoneypotRepository
 from repositories.option_sets_repo import OptionSetsRepository
@@ -37,6 +37,8 @@ def _build_intents() -> discord.Intents:
 
 class VanguardBot(commands.Bot):
     pool: asyncpg.Pool
+    database_pool: DatabasePool
+    database_schema: DatabaseSchema
     faq_repo: FaqRepository
     option_sets_repo: OptionSetsRepository
     settings_repo: SettingsRepository
@@ -56,8 +58,10 @@ class VanguardBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         # --- Persistence ----------------------------------------------------
-        self.pool = await create_pool(self.config.database_url)
-        await init_db(self.pool, self.config)
+        self.database_pool = DatabasePool(self.config.database_url)
+        self.pool = await self.database_pool.create()
+        self.database_schema = DatabaseSchema(self.pool, self.config)
+        await self.database_schema.init()
 
         self.faq_repo = FaqRepository(self.pool)
         self.option_sets_repo = OptionSetsRepository(self.pool)
@@ -97,4 +101,5 @@ class VanguardBot(commands.Bot):
 
     async def close(self) -> None:
         await super().close()
-        await close_pool(getattr(self, "pool", None))
+        if hasattr(self, "database_pool"):
+            await self.database_pool.close()
