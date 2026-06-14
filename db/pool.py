@@ -34,6 +34,9 @@ class DatabasePool:
     async def create(self) -> asyncpg.Pool:
         """Create and cache a pgvector-aware connection pool."""
 
+        if self._pool is not None:
+            return self._pool
+
         await self._ensure_extension()
         self._pool = await asyncpg.create_pool(
             self._dsn,
