@@ -4,3 +4,4 @@ pgvector==0.4.2
 sentence-transformers==5.5.1
 rapidfuzz==3.14.5
 python-dotenv==1.2.2
+pytest==7.4.2
