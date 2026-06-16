@@ -51,7 +51,7 @@ class Forms(commands.Cog):
         channel: discord.TextChannel | None = None,
     ) -> None:
         target = channel or interaction.channel
-        if not isinstance(target, discord.abc.Messageable):
+        if not isinstance(target, (discord.TextChannel, discord.Thread)):
             await interaction.response.send_message(
                 "\u26a0\ufe0f I can't post in that channel.", ephemeral=True
             )

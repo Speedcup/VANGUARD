@@ -384,7 +384,7 @@ class FAQ(commands.Cog):
         cfg = self.bot.config
         return {cid for cid in (cfg.bug_channel, cfg.suggestion_channel, cfg.help_channel) if cid}
 
-    def _is_report_channel(self, channel: discord.abc.GuildChannel | discord.Thread) -> bool:
+    def _is_report_channel(self, channel: discord.abc.MessageableChannel) -> bool:
         ids = self._report_channel_ids()
         parent_id = getattr(channel, "parent_id", None)
         return channel.id in ids or (parent_id is not None and parent_id in ids)
