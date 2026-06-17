@@ -59,10 +59,11 @@ class _BaseReportModal(discord.ui.Modal):
             return
 
         embed = self.build_embed(interaction.user)
+        threadWithMessage = None
         try:
             if isinstance(self.channel, discord.ForumChannel):
                 # Each submission becomes a new forum post (thread).
-                await self.channel.create_thread(name=self.thread_name(), embed=embed)
+                threadWithMessage = await self.channel.create_thread(name=self.thread_name(), embed=embed)
             else:
                 await self.channel.send(embed=embed)
         except discord.Forbidden:
@@ -82,8 +83,14 @@ class _BaseReportModal(discord.ui.Modal):
             )
             return
 
-        await interaction.response.send_message(
-            f"\u2705 Your {self.report_kind.lower()} has been submitted. Thank you!",
+        if not threadWithMessage: # Check if thread isn't still set to None
+            await interaction.response.send_message(
+                f"\u2705 Your {self.report_kind.lower()} request has failed. Please let a staff member know.", ephemeral=True
+            )
+            return
+
+        await interaction.followup.send(
+            f"\u2705 Your {self.report_kind.lower()} has been submitted. View thread in {threadWithMessage.thread.mention}.",
             ephemeral=True,
         )
 
