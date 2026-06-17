@@ -26,6 +26,7 @@ class Embedder:
 
         log.info("Loading embedding model %r ...", self._model_name)
         self._model = SentenceTransformer(self._model_name)
+        assert self._model is not None
         log.info("Embedding model loaded.")
 
     async def load(self) -> None:
