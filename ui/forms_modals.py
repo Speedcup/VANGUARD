@@ -146,7 +146,7 @@ class BugReportModal(_BaseReportModal):
     )
 
     def build_embed(self, user: discord.abc.User) -> discord.Embed:
-        embed = branded_embed(title=f"\U0001f41e Bug Report: {self.summary.value}", color=self.accent)
+        embed = branded_embed(title=f"{self.summary.value}", color=self.accent)
         model = self.selections.get("iphone_model", ("", "Not specified"))[1]
         line = self.selections.get("iphone_line", ("", "(Standard)"))[1]
         ios = self.selections.get("ios_version", ("", "Not specified"))[1]
@@ -196,7 +196,7 @@ class SuggestionModal(_BaseReportModal):
     )
 
     def build_embed(self, user: discord.abc.User) -> discord.Embed:
-        embed = branded_embed(title=f"\U0001f4a1 Suggestion: {self.summary.value}", color=self.accent)
+        embed = branded_embed(title=f"{self.summary.value}", color=self.accent)
         category = self.selections.get("suggestion_category", ("", "Uncategorised"))[1]
         embed.add_field(name="Category", value=category, inline=True)
         embed.add_field(name="Suggestion", value=self.suggestion.value, inline=False)
@@ -234,7 +234,7 @@ class HelpModal(_BaseReportModal):
     )
 
     def build_embed(self, user: discord.abc.User) -> discord.Embed:
-        embed = branded_embed(title=f"\u2753 Help: {self.summary.value}", color=self.accent)
+        embed = branded_embed(title=f"{self.summary.value}", color=self.accent)
         embed.add_field(name="Details", value=self.details.value, inline=False)
         if self.media.value:
             embed.add_field(name="Screenshots", value=self.media.value, inline=False)
