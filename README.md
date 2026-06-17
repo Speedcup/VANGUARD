@@ -113,6 +113,19 @@ docker build -t vanguard .
 docker run --env-file .env vanguard
 ```
 
+5. **Testing**
+
+Run the pytest suite:
+
+```bash
+pip install pytest pytest-asyncio python-dotenv
+python -m pytest -q
+```
+
+Tests cover configuration loading, logging setup, the bot client wiring, and error
+code handling. The suite runs on every pull request via the `.github/workflows/tests.yml`
+GitHub Actions workflow (Python 3.11 and 3.12).
+
 ## Required intents & permissions
 
 Enable these **privileged intents** in the Discord Developer Portal:
