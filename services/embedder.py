@@ -37,7 +37,11 @@ class Embedder:
     def dimension(self) -> int:
         if self._model is None:
             raise RuntimeError("Embedder.load() must be awaited before use.")
-        return int(self._model.get_sentence_embedding_dimension())
+        embedding_dim = self._model.get_embedding_dimension()
+        if embedding_dim is None:
+            raise RuntimeError("Failed to get embedding dimension from model.")
+        return int(embedding_dim)
+
 
     def _encode_sync(self, text: str) -> list[float]:
         assert self._model is not None  # guarded by encode()
