@@ -14,8 +14,10 @@ import logging
 import discord
 
 from ui.embeds import PRIMARY, SECONDARY, branded_embed
+from utils.errors import ErrorLog
 
 log = logging.getLogger("vanguard.forms")
+error_log = ErrorLog(log)
 
 # selections maps an option-set key -> (value, human-readable label).
 Selections = dict[str, tuple[str, str]]
@@ -52,55 +54,82 @@ class _BaseReportModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         if self.channel is None:
             await interaction.response.send_message(
-                "\u26a0\ufe0f This form isn't configured yet (no destination channel). "
-                "Please let a staff member know.",
+                "\u26a0\ufe0f This form isn't configured yet (no destination channel). Please try again later or contact staff!",
                 ephemeral=True,
             )
             return
 
         embed = self.build_embed(interaction.user)
-        threadWithMessage = None
+        thread: discord.Thread | None = None
         try:
             if isinstance(self.channel, discord.ForumChannel):
-                # Each submission becomes a new forum post (thread).
-                threadWithMessage = await self.channel.create_thread(name=self.thread_name(), embed=embed)
+                # Retrieve the thread object from the returned ThreadWithMessage object
+                thread = (await self.channel.create_thread(name=self.thread_name(), embed=embed)).thread
             else:
                 await self.channel.send(embed=embed)
-        except discord.Forbidden:
-            log.warning("Missing permission to post %s in %s", self.report_kind, self.channel)
+        except discord.Forbidden as exc:
+            code = error_log.log_error(
+                exc,
+                "Missing permission to post %s in %s",
+                self.report_kind,
+                self.channel,
+            )
             await interaction.response.send_message(
                 "\u26a0\ufe0f I don't have permission to post your submission. "
-                "Please let a staff member know.",
+                f"Please let a staff member know. Error code: `{code}`.",
                 ephemeral=True,
             )
             return
         except discord.HTTPException as exc:
-            log.warning("Failed to post %s submission: %s", self.report_kind, exc)
+            code = error_log.log_error(
+                exc,
+                "Failed to post %s submission: %s",
+                self.report_kind,
+                exc,
+            )
             await interaction.response.send_message(
                 "\u26a0\ufe0f I couldn't post your submission. If the destination is a "
-                "forum, it may require a tag to be selected. Please let a staff member know.",
+                f"forum, it may require a tag to be selected. Please try again later or contact staff! "
+                f"Error code: `{code}`.",
                 ephemeral=True,
             )
             return
 
-        if not threadWithMessage: # Check if thread isn't still set to None
+        if thread == None: # Catch thread not creating
+            code = error_log.log_error(
+                Exception("Thread object not handled/returned correctly"),
+                "Failed to create thread for %s submission",
+                self.report_kind,
+            )
             await interaction.response.send_message(
-                f"\u2705 Your {self.report_kind.lower()} request has failed. Please let a staff member know.", ephemeral=True
+                "\u26a0\ufe0f I couldn't create a thread for your submission. Please try again later or contact staff!"
+                f"Error code: `{code}`.",
+                ephemeral=True,
             )
             return
 
         await interaction.followup.send(
-            f"\u2705 Your {self.report_kind.lower()} has been submitted. View thread in {threadWithMessage.thread.mention}.",
+            f"\u2705 Your {self.report_kind.lower()} has been submitted. View thread in {thread.mention}.",
             ephemeral=True,
         )
+        return
 
     async def on_error(
         self,
         interaction: discord.Interaction,
         error: Exception,
     ) -> None:
-        log.exception("Error handling %s modal submission: %s", self.report_kind, error)
-        message = "\u26a0\ufe0f Something went wrong submitting your form. Please try again."
+        code = error_log.log_error(
+            error,
+            "Error handling %s modal submission: %s",
+            self.report_kind,
+            error,
+            exc_info=error,
+        )
+        message = (
+            "\u26a0\ufe0f Something went wrong submitting your form. Please try again later or contact staff! "
+            f"Error code: `{code}`."
+        )
         if interaction.response.is_done():
             await interaction.followup.send(message, ephemeral=True)
         else:
