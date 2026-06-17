@@ -34,6 +34,7 @@ This is a ground-up rewrite from interactions.py to discord.py.
 - **Honeypot**: trap channels that softban (purge + auto-unban) compromised
   accounts, with a live "caught" counter and a moderator log.
 
+
 ## Requirements
 
 - **Python 3.11 or 3.12** (pinned for reliable `torch` / `sentence-transformers`
@@ -213,6 +214,24 @@ forum requires a tag to be selected, posting will fail and the submitter is told
 notify staff. The bot needs **Create Posts** (and Send Messages in Threads) in the
 forum.
 
+### Error handling & logging
+
+`utils/errors.py` centralises command-error handling in an `ErrorLog` helper. It
+maps specific exception types to fixed, memorable codes and prefixes the log line
+with that code before writing to the console.
+
+| Error | Code |
+| --- | --- |
+| `NotStaff` | `sushi` |
+| `CommandOnCooldown` | `pizza` |
+| `CheckFailure` | `taco` |
+| `Forbidden` | `soup` |
+| `HTTPException` | `waffle` |
+| fallback / unknown | `panini` |
+
+Those codes are reused in the app-command error handler and in modal form posting
+errors, so the user-facing message and the log entry point to the same incident.
+
 ### Honeypot
 
 Staff designate trap channels with `/honeypot setup`. A warning embed is posted
@@ -234,5 +253,5 @@ repositories/       Data-access layer (one per concern).
 services/           Embedding model + two-stage matcher.
 cogs/               Feature cogs (faq, forms, option_sets, announcements, members, honeypot).
 ui/                 Embeds, views, modals, and the live option select.
-utils/              Staff check + centralized command error handler.
+utils/              Staff check + centralized error code/logging helpers.
 ```
